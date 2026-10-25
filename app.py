@@ -277,7 +277,35 @@ def auth_callback():
             "</body></html>",
         ])
 
+        
+        telegram_id = pending["telegram_id"]
+        pending_tickets.pop(ticket, None)
+
+        bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+        if bot_token:
+            try:
+                notify_response = requests.post(
+                    f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                    json={
+                        "chat_id": telegram_id,
+                        "text": (
+                            "TikTok успешно подключён!\n"
+                            f"Профиль: {display_name}\n"
+                            f"Получено публичных видео: {len(videos)}"
+                        ),
+                    },
+                    timeout=15,
+                )
+                if notify_response.status_code != 200:
+                    app.logger.warning(
+                        "Telegram notification failed: HTTP %s",
+                        notify_response.status_code
+                    )
+            except requests.RequestException:
+                app.logger.exception("Telegram notification request failed")
+
         return "".join(page)
+        
 
     except requests.RequestException:
         app.logger.exception("TikTok API request failed")
