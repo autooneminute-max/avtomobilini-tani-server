@@ -1,6 +1,7 @@
 
 import os
 import secrets
+import time
 import requests
 from flask import Flask, request, redirect, session, jsonify
 import html
@@ -15,6 +16,43 @@ REDIRECT_URI = os.environ.get("TIKTOK_REDIRECT_URI")
 
 AUTH_URL = "https://www.tiktok.com/v2/auth/authorize/"
 TOKEN_URL = "https://open.tiktokapis.com/v2/oauth/token/"
+
+BRIDGE_SECRET = os.environ.get("TIKTOK_BRIDGE_SECRET")
+
+# Temporary storage for pending connection requests.
+pending_tickets = {}
+
+
+@app.post("/connect/start")
+def connect_start():
+    if not BRIDGE_SECRET:
+        return jsonify({"error": "Bridge secret is not configured"}), 500
+
+    supplied_secret = request.headers.get("X-Bridge-Secret", "")
+
+    if not secrets.compare_digest(supplied_secret, BRIDGE_SECRET):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.get_json(silent=True) or {}
+    telegram_id = str(data.get("telegram_id", "")).strip()
+
+    if not telegram_id.isdigit():
+        return jsonify({"error": "Invalid Telegram user ID"}), 400
+
+    ticket = secrets.token_urlsafe(32)
+    pending_tickets[ticket] = {
+        "telegram_id": telegram_id,
+        "created_at": time.time(),
+    }
+
+    login_url = (
+        request.url_root.rstrip("/")
+        + "/login?ticket="
+        + ticket
+    )
+
+    return jsonify({"login_url": login_url})
+    
 
 
 @app.get("/")
