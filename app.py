@@ -101,10 +101,15 @@ def login():
     return redirect(AUTH_URL + "?" + urlencode(params))
     
 
+
 @app.get("/auth/callback")
 def auth_callback():
     error = request.args.get("error")
     if error:
+        ticket = session.pop("oauth_ticket", None)
+        session.pop("oauth_state", None)
+        if ticket:
+            pending_tickets.pop(ticket, None)
         return jsonify({
             "error": error,
             "description": request.args.get("error_description", "")
@@ -114,10 +119,23 @@ def auth_callback():
     state = request.args.get("state")
 
     expected_state = session.pop("oauth_state", None)
+    ticket = session.pop("oauth_ticket", None)
+
     if not expected_state or not secrets.compare_digest(
         expected_state, state or ""
     ):
         return jsonify({"error": "Invalid OAuth state"}), 400
+
+    pending = pending_tickets.get(ticket) if ticket else None
+    if not pending:
+        return jsonify({
+            "error": "Connection request expired. Return to Telegram and try again."
+        }), 400
+
+    if time.time() - pending["created_at"] > 600:
+        pending_tickets.pop(ticket, None)
+        return jsonify({"error": "Connection request expired"}), 400
+        
 
     if not all([app.secret_key, CLIENT_KEY, CLIENT_SECRET, REDIRECT_URI]):
         return jsonify({
