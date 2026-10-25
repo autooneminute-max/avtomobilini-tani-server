@@ -63,6 +63,7 @@ def home():
     })
 
 
+
 @app.get("/login")
 def login():
     if not all([app.secret_key, CLIENT_KEY, REDIRECT_URI]):
@@ -70,8 +71,23 @@ def login():
             "error": "Server environment variables are not configured"
         }), 500
 
+    ticket = request.args.get("ticket", "").strip()
+    pending = pending_tickets.get(ticket)
+
+    if not ticket or not pending:
+        return jsonify({
+            "error": "Invalid or expired connection link. Return to Telegram and try again."
+        }), 400
+
+    if time.time() - pending["created_at"] > 600:
+        pending_tickets.pop(ticket, None)
+        return jsonify({
+            "error": "Connection link expired. Return to Telegram and try again."
+        }), 400
+
     state = secrets.token_urlsafe(32)
     session["oauth_state"] = state
+    session["oauth_ticket"] = ticket
 
     params = {
         "client_key": CLIENT_KEY,
@@ -83,8 +99,7 @@ def login():
 
     from urllib.parse import urlencode
     return redirect(AUTH_URL + "?" + urlencode(params))
-
-
+    
 
 @app.get("/auth/callback")
 def auth_callback():
