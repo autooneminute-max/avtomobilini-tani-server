@@ -3,6 +3,7 @@ import os
 import secrets
 import time
 import requests
+import psycopg
 from flask import Flask, request, redirect, session, jsonify
 import html
 
@@ -18,6 +19,7 @@ AUTH_URL = "https://www.tiktok.com/v2/auth/authorize/"
 TOKEN_URL = "https://open.tiktokapis.com/v2/oauth/token/"
 
 BRIDGE_SECRET = os.environ.get("TIKTOK_BRIDGE_SECRET")
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 # Temporary storage for pending connection requests.
 pending_tickets = {}
@@ -63,6 +65,40 @@ def home():
     })
 
 
+@app.get("/db-check")
+def db_check():
+    if not DATABASE_URL:
+        return jsonify({
+            "database": "not_configured"
+        }), 503
+
+    try:
+        with psycopg.connect(
+            DATABASE_URL,
+            connect_timeout=5
+        ) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+                result = cur.fetchone()
+
+        if result == (1,):
+            return jsonify({
+                "database": "connected",
+                "status": "ok"
+            }), 200
+
+        return jsonify({
+            "database": "check_failed"
+        }), 503
+
+    except psycopg.Error:
+        app.logger.exception(
+            "PostgreSQL connection check failed"
+        )
+        return jsonify({
+            "database": "connection_failed"
+        }), 503
+        
 
 @app.get("/login")
 def login():
