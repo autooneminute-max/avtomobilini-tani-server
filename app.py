@@ -78,8 +78,16 @@ def db_check():
             connect_timeout=5
         ) as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT 1")
-                result = cur.fetchone()
+    cur.execute("SELECT 1")
+    result = cur.fetchone()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS oauth_tickets (
+            ticket TEXT PRIMARY KEY,
+            telegram_id TEXT NOT NULL,
+            created_at DOUBLE PRECISION NOT NULL
+        )
+    """)
 
         if result == (1,):
             return jsonify({
